@@ -1,0 +1,16 @@
+{
+  "name": "signal",
+  "owner": {
+    "name": "Jason Cross"
+  },
+  "metadata": {
+    "description": "Signal plugin marketplace — single-plugin marketplace exposing the Signal Mailchimp-enrichment plugin for Claude Desktop install."
+  },
+  "plugins": [
+    {
+      "name": "signal",
+      "description": "Mailchimp contact enrichment — on-demand in chat, ambient via overnight brief.",
+      "source": "./apps/plugin"
+    }
+  ]
+}

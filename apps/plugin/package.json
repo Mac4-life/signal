@@ -1,0 +1,6 @@
+{
+  "name": "@signal/plugin",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Signal Cowork plugin bundle — manifest, skills, slash commands, connector."
+}

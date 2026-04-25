@@ -1,0 +1,21 @@
+{
+  "name": "signal",
+  "version": "0.1.0",
+  "description": "Mailchimp contact enrichment — on-demand in chat, ambient via overnight brief.",
+  "author": { "name": "Jason Cross" },
+  "userConfig": {
+    "mcp_url": {
+      "type": "string",
+      "title": "Signal MCP URL",
+      "description": "Your per-user Signal MCP URL. Copy it from your Signal dashboard after completing Mailchimp + Gmail OAuth. Format: https://<worker-host>/mcp/<bearer-token>",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "mcpServers": {
+    "signal": {
+      "type": "http",
+      "url": "${user_config.mcp_url}"
+    }
+  }
+}
