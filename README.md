@@ -7,7 +7,7 @@ Single-plugin marketplace exposing the Signal Mailchimp-enrichment plugin for Cl
 In Claude Desktop:
 
 1. **Customize → Personal plugins → + → Add marketplace**
-2. URL: `Mac4-life/signal-plugin` (or the full git URL)
+2. URL: `https://github.com/Mac4-life/signal`
 3. Sync, then install **signal** from the marketplace
 4. When prompted for `mcp_url`, paste your Signal MCP URL from your dashboard
 
