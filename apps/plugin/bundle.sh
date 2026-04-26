@@ -16,7 +16,7 @@ BUNDLE_NAME="signal.plugin"
 BUNDLE_PATH="$DIST_DIR/$BUNDLE_NAME"
 
 # Sanity-check required artifacts.
-for f in .claude-plugin/plugin.json skills/enrich-contacts/SKILL.md commands/signal-setup.md commands/morning-brief.md README.md; do
+for f in .claude-plugin/plugin.json .mcp.json skills/enrich-contacts/SKILL.md commands/signal-setup.md commands/morning-brief.md README.md; do
   if [ ! -f "$PLUGIN_DIR/$f" ]; then
     echo "✗ Missing required artifact: $PLUGIN_DIR/$f"
     exit 1
@@ -25,6 +25,7 @@ done
 
 # Validate manifest JSON parses.
 python3 -m json.tool "$PLUGIN_DIR/.claude-plugin/plugin.json" > /dev/null
+python3 -m json.tool "$PLUGIN_DIR/.mcp.json" > /dev/null
 
 mkdir -p "$DIST_DIR"
 rm -f "$BUNDLE_PATH"
@@ -36,6 +37,7 @@ rm -f "$BUNDLE_PATH"
 (
   cd "$PLUGIN_DIR" && zip -rq "$BUNDLE_PATH" \
     .claude-plugin \
+    .mcp.json \
     skills \
     commands \
     README.md \
@@ -48,4 +50,4 @@ echo "  Size: $(du -h "$BUNDLE_PATH" | cut -f1)"
 echo "  Contents:"
 unzip -l "$BUNDLE_PATH" | sed 's/^/    /'
 echo ""
-echo "Install via Claude Desktop: Customize → Personal plugins → + → Upload plugin."
+echo "Install via marketplace: Customize → Personal plugins → Add marketplace → https://github.com/Mac4-life/signal."

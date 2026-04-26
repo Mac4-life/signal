@@ -26,11 +26,11 @@ Stop here.
 
 **If `brief.summary.failure` is set**, render tailored copy per `failure.step`:
 
-| `failure.step` | Copy to print |
-|---|---|
-| `gmail_fetch` | `Last night's brief couldn't be generated — Signal was unable to read your Gmail. Most common cause: Gmail OAuth was revoked or expired. Reconnect at your Signal dashboard.` |
-| `agent` | `Last night's brief is partial — the enrichment agent hit an error mid-run. ` + `Staged proposals from before the failure are below. Details: ${failure.error}` |
-| `brief_write` | `Last night's brief generated but couldn't be saved. This is a Signal infrastructure issue we'll need to investigate. ${failure.error}` |
+| `failure.step` | Copy to print                                                                                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gmail_fetch`  | `Last night's brief couldn't be generated — Signal was unable to read your Gmail. Most common cause: Gmail OAuth was revoked or expired. Reconnect at your Signal dashboard.` |
+| `agent`        | `Last night's brief is partial — the enrichment agent hit an error mid-run. ` + `Staged proposals from before the failure are below. Details: ${failure.error}`               |
+| `brief_write`  | `Last night's brief generated but couldn't be saved. This is a Signal infrastructure issue we'll need to investigate. ${failure.error}`                                       |
 
 Continue to step 3 only for `agent` (partial-but-usable). For `gmail_fetch` and `brief_write`, stop here.
 
@@ -54,12 +54,12 @@ If the returned list is shorter than `brief.proposalIds.length`, some proposals 
 
 Print a markdown table with these columns:
 
-| Column | Source |
-|---|---|
-| Contact | `proposal.contactEmail` |
-| Field | First key in `proposal.after` (most proposals are single-field; if multi-field, list comma-separated) |
-| Before → After | `proposal.before[field] → proposal.after[field]` |
-| Source | `proposal.source` |
+| Column         | Source                                                                                                |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| Contact        | `proposal.contactEmail`                                                                               |
+| Field          | First key in `proposal.after` (most proposals are single-field; if multi-field, list comma-separated) |
+| Before → After | `proposal.before[field] → proposal.after[field]`                                                      |
+| Source         | `proposal.source`                                                                                     |
 
 Rows: one per proposal, newest-first (the list comes back sorted by `createdAt` DESC already).
 
@@ -94,10 +94,12 @@ Print:
 > **Apply all proposals?** Reply `yes` to apply, or call out specific proposals to apply selectively.
 
 If the user replies `yes` (or affirmative variant):
+
 - Call `apply_proposals` with `{ proposalIds: brief.proposalIds }`.
 - Confirm the result: number applied, number skipped, any errors. Mention the `batchId` if returned (the user can `reverse_batch <batchId>` within 30 days to undo).
 
 If the user wants selective apply:
+
 - Take their selection (by row number, contact email, or natural language).
 - Call `apply_proposals` with the filtered subset.
 

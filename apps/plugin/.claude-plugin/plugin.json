@@ -1,21 +1,6 @@
 {
   "name": "signal",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Mailchimp contact enrichment — on-demand in chat, ambient via overnight brief.",
-  "author": { "name": "Jason Cross" },
-  "userConfig": {
-    "mcp_url": {
-      "type": "string",
-      "title": "Signal MCP URL",
-      "description": "Your per-user Signal MCP URL. Open https://signal-lilac-six.vercel.app/, sign in with Mailchimp (Gmail optional), then reveal & copy your MCP URL from the dashboard. Format: https://<worker-host>/mcp/<bearer-token>",
-      "sensitive": true,
-      "required": true
-    }
-  },
-  "mcpServers": {
-    "signal": {
-      "type": "http",
-      "url": "${user_config.mcp_url}"
-    }
-  }
+  "author": { "name": "Jason Cross" }
 }

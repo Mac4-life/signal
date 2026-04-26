@@ -4,7 +4,7 @@ description: Verify Signal is connected and walk the user through any setup step
 
 # /signal-setup
 
-Verifies the Signal plugin is connected end-to-end. The MCP URL was already provided during plugin install (via the `mcp_url` config prompt — stored in keychain). This command confirms the round-trip works and reminds the user of any remaining setup steps.
+Verifies the Signal plugin is connected end-to-end. Authorization is OAuth 2.1 — the user clicked **Allow** on the consent screen at install time, and the worker minted a token bound to their Mailchimp identity. This command confirms the round-trip works and reminds the user of any remaining setup steps.
 
 ## What to do when the user invokes this command
 
@@ -13,13 +13,14 @@ Verifies the Signal plugin is connected end-to-end. The MCP URL was already prov
 Call the `whoami` tool.
 
 - **Success (returns a `uid`):** print `Connected as <uid>. Signal MCP is reachable.` and continue to step 2.
-- **`not_connected` / 401 / connection refused:** the MCP URL is wrong, the bearer token has been rotated, or the worker is down. Print:
-  > Signal can't reach your MCP endpoint. Check that:
-  > 1. The MCP URL in your plugin settings matches the one in your Signal dashboard.
-  > 2. The Signal worker is running.
-  > 3. Your bearer token hasn't been rotated.
+- **`not_connected` / 401 / connection refused:** the OAuth grant has expired, was revoked, or never completed. Print:
+
+  > Signal can't reach your MCP endpoint. The most likely cause is that your OAuth grant has lapsed.
   >
-  > Update the MCP URL in **Customize → Personal plugins → Signal → Settings**, or reinstall the plugin.
+  > 1. Re-authorize: **Customize → Personal plugins → Signal → Manage → re-authorize**, or click **Install** on the Signal connector again.
+  > 2. If that doesn't help, confirm the Signal worker is running.
+  >
+  > After re-authorizing, run `/signal-setup` again.
 
   Stop here.
 
@@ -40,6 +41,7 @@ For Gmail, there's no equivalent test tool (Gmail is read by the overnight cron,
 Print this verbatim:
 
 > **What you can do now:**
+>
 > - **Mode 1 — preview pending proposals:** "What proposals are pending for my Acme contacts?"
 > - **Mode 2 — paste-in enrichment:** "Sarah Chen moved to Google" + paste a LinkedIn screenshot or email.
 > - **Mode 3 — overnight brief:** `/morning-brief` (lands the morning after Gmail is connected and at least one cron has run).
@@ -48,6 +50,6 @@ Print this verbatim:
 
 ## Failure modes to handle gracefully
 
-- User runs `/signal-setup` immediately after install with no MCP URL configured → `whoami` fails with no useful response. Step 1's error path covers this — point them at plugin settings.
+- User runs `/signal-setup` immediately after install but skipped the OAuth consent → `whoami` fails. Step 1's error path covers this — point them at the connector's Install / re-authorize action.
 - User has Mailchimp connected but not Gmail → `list_audiences` succeeds but `/morning-brief` later returns `null`. Step 2's Gmail reminder covers this.
-- User's bearer token was rotated (worker admin reissued) → old URL stops working. Step 1's "URL in settings vs dashboard" check is the path.
+- User revoked the plugin grant from the Signal dashboard → token starts 401-ing. Step 1's re-authorize copy is the path.
