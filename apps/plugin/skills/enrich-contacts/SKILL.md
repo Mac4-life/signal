@@ -27,6 +27,34 @@ For every enrichment request:
 3. **Show the preview.** Echo the staged proposal's diff (`before` → `after`) and wait for confirmation.
 4. **Apply on confirm.** Call `apply_proposals` with the proposal IDs the user approved. Confirm the result count back to the user.
 
+## Merge-field value shapes
+
+Mailchimp merge fields are typed (see `get_audience_schema`). Send the right shape to `propose_update.updates`:
+
+- **`address`** — a structured object, never a delimited string. Pipe-delimited strings are silently dropped by Mailchimp's PATCH endpoint.
+
+  ```json
+  {
+    "ADDRESS": {
+      "addr1": "2630 Marine Way",
+      "city": "Mountain View",
+      "state": "CA",
+      "zip": "94043",
+      "country": "US"
+    }
+  }
+  ```
+
+  `addr2` is optional. `country` is ISO 3166-1 alpha-2 in uppercase (`US`, `GB`, `CA`, `DE`).
+
+- **All other types** — a string scalar.
+  - `text`, `phone`, `url`, `imageurl`, `radio`, `dropdown`, `zip` — free string (radio/dropdown must be one of the audience's configured options).
+  - `date` — `MM/DD/YYYY`.
+  - `birthday` — `MM/DD` (no year).
+  - `number` — a JS number (or numeric string; Mailchimp coerces).
+
+If a paste-in carries data without a matching merge field on the audience, prefer skipping with a callout over inventing a field. The user can extend the audience schema in Mailchimp manually if needed.
+
 ## Tag handling
 
 Adding a tag that isn't in the audience's `recentTags` list (returned by `get_audience_schema`) is a meaningful event — tags proliferate fast. Flag new tags before staging and confirm.
