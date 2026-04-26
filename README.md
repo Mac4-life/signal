@@ -1,6 +1,6 @@
 # Signal — public marketplace for Claude Desktop install testing
 
-Single-plugin marketplace exposing the [Signal](https://github.intuit.com/jcross3/signal) Mailchimp-enrichment plugin for Claude Desktop install. The actual product source is at the private Intuit repo; this public mirror exists only to provide a `git URL` Claude Desktop can clone for the **Add marketplace** install path.
+Single-plugin marketplace exposing the Signal Mailchimp-enrichment plugin for Claude Desktop install. The actual product source is at the private Intuit repo; this public mirror exists only to provide a `git URL` Claude Desktop can clone for the **Add marketplace** install path.
 
 ## Install
 
