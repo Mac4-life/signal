@@ -30,13 +30,13 @@ Call `list_audiences` to test Mailchimp connectivity.
 
 - **Returns audiences:** Mailchimp is connected.
 - **`not_connected`:** Mailchimp OAuth hasn't been completed (or has been revoked). Print:
-  > Mailchimp isn't connected yet. Open your Signal dashboard and click **Connect Mailchimp** to complete OAuth. Then run `/signal-setup` again.
+  > Mailchimp isn't connected yet. Open your Signal dashboard at **https://signal-lilac-six.vercel.app/dashboard** and click **Connect Mailchimp** to complete OAuth. Then run `/signal-setup` again.
 
 For Gmail, there's no equivalent test tool (Gmail is read by the overnight cron, not by chat tools). Print a reminder either way:
 
-> **Gmail status:** Gmail is read by the overnight cron pipeline. If you haven't connected Gmail yet, open your Signal dashboard and click **Connect Gmail**. Without Gmail, `/morning-brief` won't have content to surface.
+> **Gmail status:** Gmail is read by the overnight cron pipeline. If you haven't connected Gmail yet, open your Signal dashboard at **https://signal-lilac-six.vercel.app/dashboard** and click **Connect Gmail**. Without Gmail, `/morning-brief` won't have content to surface.
 
-### Step 3 — print the demo flows
+### Step 3 — print the demo flows + dashboard URL
 
 Print this verbatim:
 
@@ -45,6 +45,8 @@ Print this verbatim:
 > - **Mode 1 — preview pending proposals:** "What proposals are pending for my Acme contacts?"
 > - **Mode 2 — paste-in enrichment:** "Sarah Chen moved to Google" + paste a LinkedIn screenshot or email.
 > - **Mode 3 — overnight brief:** `/morning-brief` (lands the morning after Gmail is connected and at least one cron has run).
+>
+> **Your dashboard:** https://signal-lilac-six.vercel.app/dashboard — manage Mailchimp + Gmail connections, see recent briefs, revoke plugin access.
 >
 > **OAuth note:** Mailchimp and Gmail are separate connections behind your Signal dashboard. If any tool call later returns `not_connected`, that's the reconnect path.
 

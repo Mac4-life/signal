@@ -57,7 +57,32 @@ If a paste-in carries data without a matching merge field on the audience, prefe
 
 ## Tag handling
 
+Use `tag_contact` to stage tag mutations on a contact. It mirrors `propose_update`'s staged-write contract — `tag_contact` writes a proposal, `apply_proposals` applies it, `reverse_batch` undoes within 30 days.
+
+**Choosing between `propose_update` and `tag_contact`:**
+
+- Use `propose_update` for **structured fields** that map to merge fields (FNAME, LNAME, COMPANY, ADDRESS, BIRTHDAY, custom merge fields, image/avatar URLs against an `imageurl` merge field).
+- Use `tag_contact` for **descriptive attributes** that don't fit a structured merge field — role categories (`design-leader`), intent signals (`high-intent`), event attendance (`attended-mcconnect-2026`), engagement signals (`replied-to-q4-launch`).
+- When in doubt, prefer `tag_contact` for free-form descriptors. Tags are Mailchimp's first-class slot for unstructured attributes; merge fields are for structured records.
+
+When a value is fundamentally **data-shaped** (URL, date, address, phone) but the audience has no merge field for it, don't shoehorn it into a tag — surface the gap to the user and offer to extend the audience schema via `add_merge_field`, then re-stage via `propose_update` against the new field once the user approves.
+
 Adding a tag that isn't in the audience's `recentTags` list (returned by `get_audience_schema`) is a meaningful event — tags proliferate fast. Flag new tags before staging and confirm.
+
+## Schema mutation — `add_merge_field`
+
+Use `add_merge_field` to stage adding a new merge field on the audience. Same staged-write contract — `add_merge_field` writes a `schema_mutation` proposal, `apply_proposals` POSTs to Mailchimp, `reverse_batch` deletes the field within 30 days.
+
+**When to propose `add_merge_field`:**
+
+- Use sparingly. The right default for unstructured data is `tag_contact`. `add_merge_field` is for cases where the user is _explicitly_ extending their audience schema — e.g., they say _"start tracking job titles"_ not _"this person is a director of design"_.
+- Always offer it as a question, never as a side-effect: _"I noticed your audience doesn't have a TITLE field. Want me to add one?"_ — never _"I'll add a TITLE field for you."_
+- Pick the right `type`. Mailchimp's options are `text`, `number`, `address`, `phone`, `date`, `url`, `imageurl`, `radio`, `dropdown`, `birthday`, `zip`. Avatar and image URLs use `imageurl`. Pick the type that matches the value shape; if the user is extending the schema, ask them to confirm the type before staging.
+- The `tag` is the all-caps slot name (max 10 chars, alphanumeric — e.g. `TITLE`, `IMAGEURL`, `PHOTO`). Let the user pick if there are plausible alternatives; don't impose one.
+
+**Reverse destroys data — call this out before applying:**
+
+When the user approves the apply, **explicitly tell them what reverse will do**: _"Reversing this proposal will delete the {TAG} field and all its values across every member in {AUDIENCE}."_ Reverse window is 30 days as with all proposals. This callout is mandatory, not optional — schema deletion is fundamentally different blast radius from a per-contact update, and the user needs to know before approving the apply.
 
 ## Paste-in handling
 

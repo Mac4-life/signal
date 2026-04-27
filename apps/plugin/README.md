@@ -31,6 +31,18 @@ The MCP server config lives in `.mcp.json` (separate file, not inline in `plugin
 
 > The marketplace URL is the same for everyone. Authorization happens via OAuth at install time — the worker mints a per-user token bound to your Mailchimp identity. There is no MCP URL to copy.
 
+## After install
+
+Your dashboard lives at **https://signal-lilac-six.vercel.app/dashboard**. From there you can:
+
+- **Connect Mailchimp** (required) — completes the OAuth that gives Signal read + staged-write access to your audience.
+- **Connect Gmail** (optional, but required for `/morning-brief`) — Signal reads the last 24 hours of inbox during the overnight cron and stages proposals.
+- **Pick the audience the cron should run against** + your local delivery hour.
+- **Revoke the plugin** — kills the OAuth grant; the plugin in Cowork starts returning `not_connected` until you re-authorize.
+- **See recent briefs** — last ten dates with proposal + non-member counts.
+
+You'll bounce here once during install (Step 4 above redirects through it). Bookmark it for managing connections later.
+
 ## Prereqs
 
 - A Signal worker deployed (Cloudflare Workers) — see the repo root README.
