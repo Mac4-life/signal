@@ -104,6 +104,26 @@ When the user pastes signal content — email body, screenshot, LinkedIn export,
 - "Delete this contact" / "remove from audience" → not supported; Signal doesn't wrap delete.
 - "Send a campaign" / "edit a template" → out of scope; Signal is contact data only.
 
+## Gmail-needing flows — when a tool returns `gmail_not_connected`
+
+Signal's bounce-rescue, morning-brief, and Gmail-driven enrichment flows depend on the user having Gmail connected. The user can finish Signal's install without Gmail (consent page Skip-for-now), so any tool that touches Gmail can return:
+
+```json
+{
+  "error": "gmail_not_connected",
+  "reason": "<short explanation>",
+  "reconnectUrl": "https://signal.example/api/gmail/oauth/start?return_to=…"
+}
+```
+
+When you see this error, do not retry, do not silently skip, and do not continue with degraded results. Surface the `reconnectUrl` to the user as a clickable link, with copy that names **what they just tried** so the prompt is concrete:
+
+> I need Gmail to do that — specifically to read bounce-related emails for the rescue flow. [Connect Gmail]({{reconnectUrl}}) (takes ~10 seconds), then ask me again.
+
+Adapt the verb to the operation: "to scan your inbox for the morning brief", "to look for the contact's new address in your replies", "to read the OOO message you mentioned". Don't generic-pitch Gmail — pin the ask to the immediate intent.
+
+After the user reconnects, they return to whatever they were doing; you re-run the tool from the original turn. If the second attempt also returns `gmail_not_connected`, tell the user the connect didn't take and point them at `/dashboard` to retry manually rather than burning another OAuth round-trip.
+
 ## Confirmations and recovery
 
 - A staged proposal lives 30 minutes (longer for cron-staged proposals). Tell the user if you suspect a proposal has expired.
