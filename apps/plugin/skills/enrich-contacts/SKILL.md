@@ -104,6 +104,31 @@ When the user pastes signal content — email body, screenshot, LinkedIn export,
 - "Delete this contact" / "remove from audience" → not supported; Signal doesn't wrap delete.
 - "Send a campaign" / "edit a template" → out of scope; Signal is contact data only.
 
+## Bounce rescue — recovering relationships when an address goes dead
+
+When a contact's address has bounced (Mailchimp `cleaned` status) or a campaign you sent is generating heavy bounces, Signal has a chain of tools that will read the user's Gmail for any signal of the contact's current address and stage a rescue. The chain is **`analyze_campaign_bounces` (or `list_cleaned_contacts`) → `find_alternate_addresses` (per non-spam-complaint bounce) → `propose_update` (set EMAIL merge field) → `apply_proposals`**. You compose it; the tools do not auto-chain.
+
+**When to use which entry point:**
+
+- **`analyze_campaign_bounces(campaignId)`** — the user asks about a specific send (_"my latest campaign bounced badly, what do we do?"_, _"what happened with the Q2 launch?"_). Returns totals (hard / soft / block / spam_complaint), per-domain counts with a domain-pattern label (`dormant_personal`, `corporate_shutdown`, `isp_aging`, or `mixed`), and a per-bounce list with each contact's merge-fields snapshot.
+- **`list_cleaned_contacts(audienceId, since?, limit?)`** — the user asks about an audience-wide view across all campaigns (_"who has bounced off HRBeats recently"_, _"show me the dead addresses"_). Optional `since` (ISO8601, default 90 days) filters server-side. Returns one row per cleaned contact with `bounceContext` (last campaign + bounce type + reason) when available.
+
+**The chain, per non-spam-complaint bounce:**
+
+1. Call `find_alternate_addresses(audienceId, contactEmail)` for each bounced contact. Returns ranked candidates with the source signal cited (OOO reply, signature drift, calendar invite, receipt re-registration, third-party mention, reply-to divergence, LinkedIn job-change). Each candidate has a `confidence` (`high` / `medium` / `low`), a `sourceMessageId`, a `sourceDeepLink` to the Gmail thread, and a `reasoning` string.
+2. For each candidate the user wants to rescue, call `propose_update` setting the `EMAIL` merge field to the new address. **Always cite the candidate's `sourceMessageId` in the proposal's `source` field** so the user can audit the lineage later.
+3. Show the user the staged proposals with the source citations and confidence levels. Wait for approval.
+4. Call `apply_proposals` with the approved proposal IDs. Mailchimp batches automatically when there are >3 ops.
+
+**Hard rules for the rescue flow (never violate):**
+
+1. **Spam-complaint bounces are surfaced but never enriched.** When `analyze_campaign_bounces` returns a row with `bounceType: "spam_complaint"`, do NOT propose a rescue for that contact even if `find_alternate_addresses` returns high-confidence candidates. Those people asked Mailchimp to stop emailing them; recovering them via a side-door address is a compliance violation. Surface the count to the user as informational and move on.
+2. **Status mutations are forbidden in this flow.** Do not propose changes to `status` (subscribe / unsubscribe / cleaned). The rescue path only writes the EMAIL merge field. If the user asks you to "re-subscribe everyone we just rescued," decline — they need to do that step themselves in Mailchimp.
+3. **Source citation is mandatory.** Every rescue proposal must include the `sourceMessageId` from `find_alternate_addresses` in the proposal's `source` field. The user needs the Gmail breadcrumb to audit and approve confidently.
+4. **High-confidence is a UI hint, not a bypass.** Even when a candidate is high-confidence, the proposal still goes through `propose_update` → user approval → `apply_proposals`. Never skip the staging step.
+
+If `find_alternate_addresses` returns zero candidates for a contact, surface that contact in a "no signal — consider sunsetting" tail. Do not propose anything for them. The user takes action in Mailchimp directly.
+
 ## Gmail-needing flows — when a tool returns `gmail_not_connected`
 
 Signal's bounce-rescue, morning-brief, and Gmail-driven enrichment flows depend on the user having Gmail connected. The user can finish Signal's install without Gmail (consent page Skip-for-now), so any tool that touches Gmail can return:
