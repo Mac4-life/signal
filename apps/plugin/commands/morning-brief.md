@@ -77,6 +77,38 @@ Then a bullet list, one per signal:
 
 These are signals the cron extracted for people who aren't members of any of the user's audiences. Signal never creates contacts, so they're surfaced for awareness only — the user can manually add them through their Mailchimp signup form if they want.
 
+### Step 5.5 — render rescue sections (PR Bounce-C)
+
+The cron's pre-loop populates three optional brief dimensions. Render any that are non-empty.
+
+**Bounced contacts — possible new addresses.** Filter `proposals` (already loaded in step 3) to those where `proposal.source.briefSection === "alternate_address"`. These are pre-staged rescue proposals — they already appear in the main proposals table from step 4. If you want to call them out separately, note the count under that table:
+
+> _N of the proposals above are bounce-rescue candidates (alternate addresses we found in your Gmail). Source citations are in their `source.alternateAddressCandidate.sourceMessageId`._
+
+**At-risk soft-bouncers — signals worth investigating.** If `brief.summary.atRiskSoftBouncers?.length > 0`, print:
+
+> **At-risk soft-bouncers — signals worth investigating:**
+
+Then one row per entry:
+
+```
+- {entry.contactEmail} — {entry.consecutiveSoftBounces} consecutive soft bounces
+  Possible new address: {candidate.candidateEmail} ({candidate.confidence})
+  Source: {candidate.strategy} → {candidate.sourceDeepLink}
+```
+
+These are still-subscribed contacts, no proposal staged. The user can ask you to rescue specific ones manually — when they do, you re-run the on-demand chain (`find_alternate_addresses` → `propose_update`).
+
+**Bounced contacts with no signal — consider sunsetting.** If `brief.summary.cleanedNoSignal?.length > 0`, print:
+
+> **Bounced contacts — no signal found ({N}). Consider sunsetting these from active segments:**
+
+Followed by a bullet list of the emails (cap to 10 with a "and N more" tail if longer). Then offer the ack:
+
+> Want me to mark these as reviewed? They won't reappear in tomorrow's brief unless they re-bounce.
+
+If the user agrees, call `mark_bounces_reviewed({ audienceId: brief.uid → user.scheduleConfig.audienceId, contactEmails: [...] })`. The audienceId comes from the user's `scheduleConfig`, which `get_brief` already resolved. Confirm the ack count back to the user.
+
 ### Step 6 — render partial / truncation notes
 
 If `brief.summary.partial === true`:

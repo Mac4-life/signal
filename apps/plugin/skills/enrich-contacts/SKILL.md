@@ -129,6 +129,20 @@ When a contact's address has bounced (Mailchimp `cleaned` status) or a campaign 
 
 If `find_alternate_addresses` returns zero candidates for a contact, surface that contact in a "no signal — consider sunsetting" tail. Do not propose anything for them. The user takes action in Mailchimp directly.
 
+## Bounce rescue — ambient mode (the morning brief)
+
+The cron pipeline runs the rescue chain on its own each morning. When the user runs `/morning-brief`, the brief carries three additional sections beyond the regular Gmail-derived proposals:
+
+- **"Bounced contacts — possible new addresses"** — pre-staged rescue proposals. Each carries a `source.briefSection: "alternate_address"` and an `alternateAddressCandidate` block citing the Gmail signal. Render them in the proposals table like any other proposal — the apply CTA is the same one-confirmation flow.
+- **"At-risk soft-bouncers — signals worth investigating"** — still-subscribed contacts with 3+ trailing soft bounces AND a low/medium-confidence alternate-address candidate. Informational; no proposal staged. Render the contact, the bounce count, and the candidate(s) with their source links. The user can ask you to rescue specific ones manually via the on-demand chain — when they do, you re-run `find_alternate_addresses` and `propose_update` per the standard flow.
+- **"Bounced contacts with no signal — consider sunsetting"** — cleaned contacts the cron searched Gmail for and found nothing. After the user has triaged this list, offer to mark them as reviewed so they don't reappear in tomorrow's brief: _"Want me to mark these {N} contacts as reviewed? They won't show up again unless they re-bounce."_ If the user agrees, call `mark_bounces_reviewed({ audienceId, contactEmails: [...] })`. Acks persist for 90 days and are scoped per audience.
+
+**Rules for ambient rescue:**
+
+- Don't re-stage what the cron already staged. Pre-staged rescue proposals are in `brief.proposalIds[]` like everything else; just render them in the proposals table with the source citation visible.
+- The cron only auto-stages strategies the rubric considers reliable: `ooo_reply`, `signature_drift`, `receipt_re_registration`, `calendar_invite`. High-confidence `linkedin_job_change` and `third_party_mention` candidates appear in the brief's "at-risk" or "no signal" sections, not as auto-staged proposals — those strategies need explicit user judgment because a same-name confusion is too easy.
+- Spam-complaint bounces never appear in any rescue section. The G4 guardrail holds across both the on-demand and ambient flows.
+
 ## Gmail-needing flows — when a tool returns `gmail_not_connected`
 
 Signal's bounce-rescue, morning-brief, and Gmail-driven enrichment flows depend on the user having Gmail connected. The user can finish Signal's install without Gmail (consent page Skip-for-now), so any tool that touches Gmail can return:
