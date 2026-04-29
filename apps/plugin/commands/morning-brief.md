@@ -34,11 +34,21 @@ Stop here.
 
 **Gmail-fetch failure rendering.** When `failure.step === "gmail_fetch"`, render exactly:
 
-> Last night's brief couldn't be generated — Signal couldn't read your Gmail (Google rejected the saved token). Reconnect Signal's Gmail authorization here: [Reconnect Gmail]({{failure.reconnectUrl}}). After reconnecting, click "Run cron now" on your Signal dashboard to regenerate today's brief, or wait for tonight's overnight tick.
+> Last night's brief couldn't be generated — Signal couldn't read your Gmail (Google rejected the saved token). Reconnect Signal's Gmail authorization here: [Reconnect Gmail]({{failure.reconnectUrl}}). After reconnecting, reply `run brief now` and I'll regenerate today's brief on demand.
 
 Use the `failure.reconnectUrl` from the brief verbatim — it is Signal's own Google OAuth start URL on Vercel (`/api/gmail/oauth/start`). Do NOT direct the user to Claude Desktop settings, the Connectors menu, or any other Claude-side surface — those are different OAuth flows that have no effect on Signal's worker token. If `failure.reconnectUrl` is somehow missing from the brief, point the user at `/dashboard` directly and tell them to click the Gmail "Reconnect" button there.
 
-Continue to step 3 only for `agent` (partial-but-usable). For `gmail_fetch` and `brief_write`, stop here.
+**Handling the user's `run brief now` reply.** When the user replies `run brief now` (or an affirmative variant like "yes, regenerate", "rerun it", "do it now") after the Gmail-reconnect prompt above, call the `run_brief_now` MCP tool with no arguments. Render the result by `structuredContent`:
+
+- If `ok === true && failure === null` → success. Continue with the regenerated brief from step 3 below (the new brief is already written; re-call `get_brief` to pick it up, or render directly off the `proposalCount`/`nonMemberSignalCount` summary the tool returns and skip ahead to step 7's apply CTA after step 3 fetches the proposals).
+- If `ok === true && failure.step === "gmail_fetch"` → the reconnect didn't take. Surface the same Reconnect Gmail link from `failure.reconnectUrl` and ask the user to confirm they completed the OAuth flow in their browser before retrying.
+- If `ok === true && failure.step === "agent"` or `"brief_write"` → render the matching row from the failure-step table above with the new `failure.error`.
+- If `ok === true && briefRead === "kv_failed" | "missing" | "parse_drift"` → tell the user the pipeline ran but the brief couldn't be read back; ask them to refresh `/dashboard` or re-run `/morning-brief` in a moment.
+- If `ok === false` → render the error message from `content[0].text` verbatim. Common shapes: `error === "no_schedule"` (user hasn't picked a delivery hour yet), `error === "not_found"` (no Signal account record).
+
+Do NOT call `run_brief_now` proactively or routinely — only when the user explicitly asks to regenerate after a Gmail reconnect. The tool deletes today's brief and re-runs the full pipeline; firing it on every `/morning-brief` invocation would burn Anthropic + Gmail budget for no reason. The default read path is `get_brief` (already invoked at step 1).
+
+Continue to step 3 only for `agent` (partial-but-usable). For `gmail_fetch` and `brief_write`, stop here unless the user replies `run brief now`.
 
 **If `brief.proposalIds.length === 0 && brief.summary.nonMemberSignals.length === 0`:**
 
