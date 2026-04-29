@@ -26,11 +26,17 @@ Stop here.
 
 **If `brief.summary.failure` is set**, render tailored copy per `failure.step`:
 
-| `failure.step` | Copy to print                                                                                                                                                                 |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gmail_fetch`  | `Last night's brief couldn't be generated — Signal was unable to read your Gmail. Most common cause: Gmail OAuth was revoked or expired. Reconnect at your Signal dashboard.` |
-| `agent`        | `Last night's brief is partial — the enrichment agent hit an error mid-run. ` + `Staged proposals from before the failure are below. Details: ${failure.error}`               |
-| `brief_write`  | `Last night's brief generated but couldn't be saved. This is a Signal infrastructure issue we'll need to investigate. ${failure.error}`                                       |
+| `failure.step` | Copy to print                                                                                                                                                                                                                                 |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gmail_fetch`  | See "Gmail-fetch failure rendering" below — the brief carries a structured `failure.reconnectUrl` you must render as a clickable link to **Signal's** dashboard. Never paraphrase this as Claude Desktop's "Connectors" menu — wrong surface. |
+| `agent`        | `Last night's brief is partial — the enrichment agent hit an error mid-run. ` + `Staged proposals from before the failure are below. Details: ${failure.error}`                                                                               |
+| `brief_write`  | `Last night's brief generated but couldn't be saved. This is a Signal infrastructure issue we'll need to investigate. ${failure.error}`                                                                                                       |
+
+**Gmail-fetch failure rendering.** When `failure.step === "gmail_fetch"`, render exactly:
+
+> Last night's brief couldn't be generated — Signal couldn't read your Gmail (Google rejected the saved token). Reconnect Signal's Gmail authorization here: [Reconnect Gmail]({{failure.reconnectUrl}}). After reconnecting, click "Run cron now" on your Signal dashboard to regenerate today's brief, or wait for tonight's overnight tick.
+
+Use the `failure.reconnectUrl` from the brief verbatim — it is Signal's own Google OAuth start URL on Vercel (`/api/gmail/oauth/start`). Do NOT direct the user to Claude Desktop settings, the Connectors menu, or any other Claude-side surface — those are different OAuth flows that have no effect on Signal's worker token. If `failure.reconnectUrl` is somehow missing from the brief, point the user at `/dashboard` directly and tell them to click the Gmail "Reconnect" button there.
 
 Continue to step 3 only for `agent` (partial-but-usable). For `gmail_fetch` and `brief_write`, stop here.
 

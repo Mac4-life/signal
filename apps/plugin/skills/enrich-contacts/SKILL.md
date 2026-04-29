@@ -164,6 +164,14 @@ Adapt the verb to the operation: "to scan your inbox for the morning brief", "to
 
 After the user reconnects, they return to whatever they were doing; you re-run the tool from the original turn. If the second attempt also returns `gmail_not_connected`, tell the user the connect didn't take and point them at `/dashboard` to retry manually rather than burning another OAuth round-trip.
 
+## Gmail-fetch failures in `/morning-brief` — `brief.summary.failure.step === "gmail_fetch"`
+
+Distinct from on-demand `gmail_not_connected` errors: this is the cron-side Gmail failure shape. When `/morning-brief` returns a brief with `summary.failure.step === "gmail_fetch"`, the brief carries `summary.failure.reconnectUrl` — render it verbatim as a clickable link to **Signal's** dashboard.
+
+**Never tell the user to "reconnect the Gmail connector in Claude settings" or "go to Connectors → Gmail" or any variant.** Claude Desktop's Gmail connector is a separate Cowork-side OAuth surface — it has no effect on Signal's worker-side Google token, and directing the user there will not fix the brief. Signal's reconnect surface is **`/dashboard`** (or the structured `reconnectUrl` from the brief), and only that.
+
+If you cannot find `failure.reconnectUrl` on the brief object, point the user at `/dashboard` directly and tell them to click "Reconnect" next to Gmail. Never improvise a Claude-side connector path.
+
 ## Confirmations and recovery
 
 - A staged proposal lives 30 minutes (longer for cron-staged proposals). Tell the user if you suspect a proposal has expired.
