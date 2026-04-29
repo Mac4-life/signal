@@ -110,6 +110,7 @@ When a contact's address has bounced (Mailchimp `cleaned` status) or a campaign 
 
 **When to use which entry point:**
 
+- **`list_campaigns({ audienceId?, since?, limit? })`** — call this FIRST whenever the user references a campaign by name, subject line, recency, or web URL. Mailchimp's API uses an alphanumeric campaign id (e.g. `b8c2f3a1e4`); the dashboard URL exposes only the short numeric `web_id` (e.g. `/reports/show?id=12345`). Never ask the user to copy the API id from the Mailchimp UI — call `list_campaigns`, match the user's reference (by `title`, `subjectLine`, `webId`, or recency), then use the matching `id` to call `analyze_campaign_bounces`.
 - **`analyze_campaign_bounces(campaignId)`** — the user asks about a specific send (_"my latest campaign bounced badly, what do we do?"_, _"what happened with the Q2 launch?"_). Returns totals (hard / soft / block / spam_complaint), per-domain counts with a domain-pattern label (`dormant_personal`, `corporate_shutdown`, `isp_aging`, or `mixed`), and a per-bounce list with each contact's merge-fields snapshot.
 - **`list_cleaned_contacts(audienceId, since?, limit?)`** — the user asks about an audience-wide view across all campaigns (_"who has bounced off HRBeats recently"_, _"show me the dead addresses"_). Optional `since` (ISO8601, default 90 days) filters server-side. Returns one row per cleaned contact with `bounceContext` (last campaign + bounce type + reason) when available.
 

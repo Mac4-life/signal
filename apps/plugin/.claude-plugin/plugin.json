@@ -1,6 +1,6 @@
 {
   "name": "signal",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Mailchimp contact enrichment — on-demand in chat, ambient via overnight brief.",
   "author": { "name": "Jason Cross" }
 }
