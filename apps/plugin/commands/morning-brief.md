@@ -62,11 +62,21 @@ Stop here.
 
 Construct the brief reference: `briefId = "${brief.uid}/${brief.date}"`.
 
-Call `list_proposals` with `{ briefId, status: "pending" }`. This returns the full `Proposal` records for the IDs in `brief.proposalIds`. (The cron stamps `Proposal.briefId` in the same shape; the filter is exact-match.)
+Call `list_proposals` with `{ briefId, status: "all" }`. This returns every `Proposal` record currently in KV for this brief — pending, applied, AND reversed — so you can give the user an accurate picture of what's actionable vs. what's already done.
 
-If the returned list is shorter than `brief.proposalIds.length`, some proposals expired (cron-staged proposals live 6 hours). Note the count discrepancy in the output.
+**Critical: do NOT default to `status: "pending"` here.** That filter silently drops applied/reversed proposals, making the returned list shorter than `brief.proposalIds.length` — which would mislead you into reporting "some proposals expired" when in fact they were already applied (via the `/dashboard` or an earlier chat turn). Cron-staged proposals live 6 hours in KV; chat-staged ones live 30 minutes. Within those windows, a "missing" record almost always means "applied," not "expired."
+
+Partition the returned records by `proposal.status`:
+
+- `pending` → the actionable set; render in step 4 as the "Pending" table and offer to apply in step 7.
+- `applied` → already done; render as a short "Already applied this brief" summary line so the user sees the math (no apply CTA on these).
+- `reversed` → render only if non-empty; one-line "N reversed via reverse_batch" note.
+
+If `pending.length + applied.length + reversed.length < brief.proposalIds.length`, the gap is **genuinely** TTL-expired records (KV `get` returned null). Only THEN note "N proposals expired before review — re-run `run brief now` if you need them back." Be precise: don't conflate applied with expired.
 
 ### Step 4 — render the proposals table
+
+Use ONLY the `pending` partition from step 3 as the table rows. Skip applied/reversed proposals here — they get a separate one-line summary below the table.
 
 Print a markdown table with these columns:
 
@@ -77,7 +87,21 @@ Print a markdown table with these columns:
 | Before → After | `proposal.before[field] → proposal.after[field]`                                                      |
 | Source         | `proposal.source`                                                                                     |
 
-Rows: one per proposal, newest-first (the list comes back sorted by `createdAt` DESC already).
+Rows: one per pending proposal, newest-first (the list comes back sorted by `createdAt` DESC already).
+
+After the table, if `applied.length > 0`, print one line:
+
+> _N proposals already applied earlier (via this chat or the dashboard) — not re-listed above._
+
+If `reversed.length > 0`, print one line:
+
+> _N proposals were reversed via `reverse_batch` — not re-listed above._
+
+If `pending.length === 0` but `applied.length > 0`, the brief is fully resolved — say so explicitly so the user doesn't think the brief is broken:
+
+> All proposals from this brief have been applied. Nothing pending for review. Run `run brief now` if you want a fresh pass over your Gmail.
+
+Stop here in that case — no apply CTA, the work is done.
 
 ### Step 5 — render "Not in audience" section
 
@@ -137,24 +161,26 @@ If `brief.summary.truncatedAfter` is set:
 
 ### Step 7 — offer the apply CTA
 
+Only fire this step when `pending.length > 0` (step 4 already short-circuits the all-applied case). The apply set is the pending partition from step 3 — NOT `brief.proposalIds` verbatim, which would re-run already-applied entries (idempotent but noisy in the output).
+
 Print:
 
-> **Apply all proposals?** Reply `yes` to apply, or call out specific proposals to apply selectively.
+> **Apply the {pending.length} pending proposals above?** Reply `yes` to apply all, or call out specific rows / contact emails to apply selectively.
 
 If the user replies `yes` (or affirmative variant):
 
-- Call `apply_proposals` with `{ proposalIds: brief.proposalIds }`.
+- Call `apply_proposals` with `{ proposalIds: pending.map(p => p.id) }`.
 - Confirm the result: number applied, number skipped, any errors. Mention the `batchId` if returned (the user can `reverse_batch <batchId>` within 30 days to undo).
 
 If the user wants selective apply:
 
 - Take their selection (by row number, contact email, or natural language).
-- Call `apply_proposals` with the filtered subset.
+- Call `apply_proposals` with the filtered subset (still drawn from `pending`, not from `brief.proposalIds`).
 
 ## Failure modes to handle gracefully
 
 - `get_brief` returns 5xx — print the storage-error message verbatim; tell user to retry.
-- `list_proposals` returns fewer records than `brief.proposalIds.length` — proposals expired; render what's available + note the count.
+- `list_proposals` (with `status: "all"`) returns fewer records than `brief.proposalIds.length` — those records are genuinely expired (KV TTL). Render what's available + note the count. **Do not** assume expiry when the count is short under any other condition; if you called `list_proposals` with a status filter (`pending`, `applied`, etc.), shortness reflects the filter, not expiry.
 - `apply_proposals` returns drift_detected on some entries — those contacts changed since the brief was generated; show which ones skipped and why.
 - User says `apply` then changes mind — confirm before calling `apply_proposals`. The tool runs sequentially for ≤3 ops and via `POST /batches` for >3; either way, applied changes are real.
 
