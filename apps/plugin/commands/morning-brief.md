@@ -58,50 +58,62 @@ Print:
 
 Stop here.
 
-### Step 3 — fetch the proposal records
+### Step 3 — load the data Signal already prepared
 
-Construct the brief reference: `briefId = "${brief.uid}/${brief.date}"`.
+Two MCP calls (both fast, results inform every later step). Don't surface tool names in your user-facing output — they're internal plumbing.
 
-Call `list_proposals` with `{ briefId, status: "all" }`. This returns every `Proposal` record currently in KV for this brief — pending, applied, AND reversed — so you can give the user an accurate picture of what's actionable vs. what's already done.
+1. **Fetch the staged updates for this brief.** Construct `briefId = "${brief.uid}/${brief.date}"`, then call `list_proposals` with `{ briefId, status: "all" }`. This returns every record currently in KV for this brief — pending, applied, AND reversed — so you can describe what's actionable vs. what's already done.
 
-**Critical: do NOT default to `status: "pending"` here.** That filter silently drops applied/reversed proposals, making the returned list shorter than `brief.proposalIds.length` — which would mislead you into reporting "some proposals expired" when in fact they were already applied (via the `/dashboard` or an earlier chat turn). Cron-staged proposals live 6 hours in KV; chat-staged ones live 30 minutes. Within those windows, a "missing" record almost always means "applied," not "expired."
+   **Critical: do NOT default to `status: "pending"` here.** The default filter silently drops applied/reversed records, making the returned list shorter than `brief.proposalIds.length` — which would mislead you into reporting "some updates expired" when in fact they'd already been applied (via `/dashboard` or an earlier chat turn). Cron-staged records live 6 hours in KV; chat-staged ones live 30 minutes. Within those windows, a "missing" record almost always means **applied** or **superseded by a fresh scan** (`run_brief_now` deletes the brief and re-stages under new IDs), not "TTL expired."
 
-Partition the returned records by `proposal.status`:
+2. **Fetch the audience info** so you can render merge-field tags as human names AND show the audience's human name (not its raw ID).
+   - Call `list_audiences` (no args). The response includes every audience with `id`, `name`, and `memberCount`. Find the audience whose `id` is the first segment of `proposals` you got back: any pending/applied record has `proposal.audienceId`, so pick `audienceName = audiences.find(a => a.id === proposals[0]?.audienceId)?.name ?? "your audience"`. (Single-audience users will just see one entry.)
+   - Call `get_audience_schema` with `{ audienceId: proposals[0]?.audienceId }` (if there are no records to derive the audience from, skip the schema call — the all-applied / all-superseded path won't render any tags anyway). Build a quick lookup: `tagToName = Object.fromEntries(schema.mergeFields.map(f => [f.tag, f.name]))`. Every time you'd otherwise show a tag like `LASTCONT` in user-facing prose, render `tagToName[tag] ?? tag` so the user sees "Last contacted" instead.
 
-- `pending` → the actionable set; render in step 4 as the "Pending" table and offer to apply in step 7.
-- `applied` → already done; render as a short "Already applied this brief" summary line so the user sees the math (no apply CTA on these).
-- `reversed` → render only if non-empty; one-line "N reversed via reverse_batch" note.
+Partition the staged-updates response by `proposal.status`:
 
-If `pending.length + applied.length + reversed.length < brief.proposalIds.length`, the gap is **genuinely** TTL-expired records (KV `get` returned null). Only THEN note "N proposals expired before review — re-run `run brief now` if you need them back." Be precise: don't conflate applied with expired.
+- `pending` → still actionable; renders in step 4 as the main table and gets the Apply offer in step 7.
+- `applied` → already done; one-line summary in step 4 (no Apply CTA on these — they're history).
+- `reversed` → render only if non-empty; one-line "N undone from this brief" note.
 
-### Step 4 — render the proposals table
+**Diagnosing missing records.** If `pending.length + applied.length + reversed.length < brief.proposalIds.length`, decide between two cases (use the brief's `generatedAt` to break the tie):
 
-Use ONLY the `pending` partition from step 3 as the table rows. Skip applied/reversed proposals here — they get a separate one-line summary below the table.
+| Time elapsed since `brief.generatedAt`                      | Likely cause                                                                                                                 | What to say                                                                                         |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| < 6 hours, brief is original (not regenerated this session) | Some records purged early (rare — KV TTL is 6h on cron-staged)                                                               | "N updates aged out of the staging window before review"                                            |
+| < 6 hours, but `run_brief_now` was called this session      | **Superseded by a fresh scan** — old IDs were dropped when the brief was regenerated under new IDs. This is the common case. | "N earlier suggestions were replaced when we re-scanned. The current list above is the latest set." |
+| > 6 hours                                                   | Genuine TTL expiry                                                                                                           | "N updates aged out of the staging window. Re-scan your inbox to bring back the latest."            |
 
-Print a markdown table with these columns:
+Never use "30-minute TTL" in user-facing copy for cron-staged briefs — that's the chat-side number and doesn't apply. **Don't conflate applied with expired.** Don't conflate superseded with expired.
 
-| Column         | Source                                                                                                |
-| -------------- | ----------------------------------------------------------------------------------------------------- |
-| Contact        | `proposal.contactEmail`                                                                               |
-| Field          | First key in `proposal.after` (most proposals are single-field; if multi-field, list comma-separated) |
-| Before → After | `proposal.before[field] → proposal.after[field]`                                                      |
-| Source         | `proposal.source`                                                                                     |
+### Step 4 — render the suggested updates
 
-Rows: one per pending proposal, newest-first (the list comes back sorted by `createdAt` DESC already).
+Use ONLY the `pending` partition from step 3. Skip applied/reversed records here — they get summary lines below the table.
 
-After the table, if `applied.length > 0`, print one line:
+Open with a one-sentence framing the user can read at a glance. Use the audience name from step 3's schema lookup (never the raw audience ID, never the literal phrase "proposals generated"):
 
-> _N proposals already applied earlier (via this chat or the dashboard) — not re-listed above._
+> Last night's scan of your inbox found **{pending.length} suggested update{s}** for {audienceName}.
 
-If `reversed.length > 0`, print one line:
+Then print a markdown table:
 
-> _N proposals were reversed via `reverse_batch` — not re-listed above._
+| Column          | What goes in it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #               | Row number, 1-based, so the user can refer to a row by number in selective apply.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Contact         | `proposal.contactEmail`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| What's changing | A human-readable summary of `proposal.before` → `proposal.after`. For each key in `proposal.after`: render `{tagToName[key] ?? humanizedKey}: "{before}" → "{after}"` (use em-dash for `null`/`""` before-values: `—`). If multi-field, one bullet per field within the cell. **Do NOT print the raw tag** (like `LASTCONT` or `ICOUNT90D`) — always translate via the `tagToName` map from step 3. **Do NOT print arrow notation against dates without context** — e.g. `LASTCONT → 2026-05-12` is unreadable; render `Last contacted: 2026-05-12` instead. For `schema_mutation` records (which add new merge fields rather than update a contact), the cell renders `New audience field: {mergeFields.map(f => f.name).join(", ")}` — those don't have a meaningful Contact column, so use the audience name as the Contact cell for those rows. |
+| Why             | A one-line citation pulled from `proposal.source.text` if present, else the briefSection (translate: `templated` → "Templated signal", `alternate_address` → "Bounce-rescue candidate", `general` / `cron` → "Email content"). For relationship-signals proposals (those with `source.text` like "Relationship signals (last 90 days)"), render "Relationship signals — last 90 days".                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
-If `pending.length === 0` but `applied.length > 0`, the brief is fully resolved — say so explicitly so the user doesn't think the brief is broken:
+Rows: one per pending record, newest-first.
 
-> All proposals from this brief have been applied. Nothing pending for review. Run `run brief now` if you want a fresh pass over your Gmail.
+After the table, render concise summary lines (each only if its count > 0):
 
-Stop here in that case — no apply CTA, the work is done.
+- `applied.length > 0` → `_{N} more update{s} already applied (this chat or the dashboard) — not re-listed above._`
+- `reversed.length > 0` → `_{N} update{s} from this brief were undone earlier — not re-listed above._`
+- "missing" gap from step 3 → use the prose from step 3's diagnosis table (superseded / aged-out / TTL-expired wording, chosen by the elapsed-time + run_brief_now check).
+
+**All-applied short-circuit.** If `pending.length === 0 && applied.length > 0`, the brief is fully resolved. Render explicit success copy and stop — no apply CTA, no follow-up question, the work is done:
+
+> ✅ Every suggested update from this brief has been applied. Nothing left pending. Ask me to scan your inbox again whenever you want a fresh batch.
 
 ### Step 5 — render "Not in audience" section
 
@@ -159,31 +171,37 @@ If `brief.summary.truncatedAfter` is set:
 
 > The agent stopped after `${truncatedAfter}` emails (step cap reached). Older emails weren't processed.
 
-### Step 7 — offer the apply CTA
+### Step 7 — offer to apply
 
-Only fire this step when `pending.length > 0` (step 4 already short-circuits the all-applied case). The apply set is the pending partition from step 3 — NOT `brief.proposalIds` verbatim, which would re-run already-applied entries (idempotent but noisy in the output).
+Only fire when `pending.length > 0` (step 4 short-circuits the all-applied case). The apply set is the pending partition from step 3 — NOT `brief.proposalIds` verbatim, which would re-fire already-applied entries (idempotent but noisy).
 
-Print:
+Print exactly one of these two prompts:
 
-> **Apply the {pending.length} pending proposals above?** Reply `yes` to apply all, or call out specific rows / contact emails to apply selectively.
+- If `pending.length === 1`:
+  > **Apply this update to Mailchimp?** Reply `yes` to apply, or `skip` to leave it for now.
+- If `pending.length > 1`:
+  > **Apply all {pending.length} updates to Mailchimp?** Reply `yes` to apply everything, or call out specific rows (e.g. "row 2" or the contact email) to apply a subset.
 
 If the user replies `yes` (or affirmative variant):
 
 - Call `apply_proposals` with `{ proposalIds: pending.map(p => p.id) }`.
-- Confirm the result: number applied, number skipped, any errors. Mention the `batchId` if returned (the user can `reverse_batch <batchId>` within 30 days to undo).
+- Render the result in plain English. Count successes, count skips, count errors. Mention the batch ID **only** if there were ≥1 successes, in the recovery-friendly phrasing: `_If you need to undo, ask me to "reverse batch {batchId}" — reversal stays available for 30 days._`. Don't lead with the batch ID — it's plumbing.
 
 If the user wants selective apply:
 
-- Take their selection (by row number, contact email, or natural language).
+- Take their selection (by row number, contact email, or natural language). Resolve to a subset of `pending`.
 - Call `apply_proposals` with the filtered subset (still drawn from `pending`, not from `brief.proposalIds`).
+- Render the result in the same English-first style.
+
+**Lexicon discipline through this whole flow:** in user-facing output, talk about **suggested updates** or **updates**, not "proposals." Talk about **applying** an update, not "staging" it. Talk about **scanning your inbox**, not "re-running the cron pipeline." Talk about **audience name** (from step 3's schema), not raw audience IDs. Never expose MCP tool names (`apply_proposals`, `list_proposals`, `run_brief_now`) in prose to the user — when prompting for an action, use English ("ask me to scan again", "regenerate this brief"). Tool names are fine inside fenced code blocks if the user explicitly asks how to do something themselves.
 
 ## Failure modes to handle gracefully
 
-- `get_brief` returns 5xx — print the storage-error message verbatim; tell user to retry.
-- `list_proposals` (with `status: "all"`) returns fewer records than `brief.proposalIds.length` — those records are genuinely expired (KV TTL). Render what's available + note the count. **Do not** assume expiry when the count is short under any other condition; if you called `list_proposals` with a status filter (`pending`, `applied`, etc.), shortness reflects the filter, not expiry.
-- `apply_proposals` returns drift_detected on some entries — those contacts changed since the brief was generated; show which ones skipped and why.
-- User says `apply` then changes mind — confirm before calling `apply_proposals`. The tool runs sequentially for ≤3 ops and via `POST /batches` for >3; either way, applied changes are real.
+- `get_brief` returns 5xx — print the storage-error message verbatim; tell user to retry. Don't paraphrase the error in technical terms — say "Signal couldn't load today's brief; try again in a moment."
+- `list_proposals` (with `status: "all"`) returns fewer records than `brief.proposalIds.length` — use the **diagnosis table from Step 3** to pick the right user-facing wording: "superseded by a fresh scan" if `run_brief_now` was called this session, "aged out of the staging window" if more than 6 hours have passed since `brief.generatedAt`, and **never** "30-minute TTL" for cron-staged briefs. Don't assume expiry when the count is short under any other condition.
+- `apply_proposals` returns drift_detected on some entries — those contacts changed in Mailchimp since the brief was generated; render plainly: "{N} update{s} skipped because {contact}'s record changed since this brief was written. Re-scan to bring in the latest." Don't say "drift detected" verbatim.
+- User says `apply` then changes mind — confirm before calling `apply_proposals`. Either way, applied changes are real and reach Mailchimp immediately on success.
 
 ## Recovery
 
-If the user wants to undo, ask them for the `batchId` from the previous apply confirmation, then call `reverse_batch`. Reverses are idempotent and live for 30 days.
+If the user wants to undo, ask them for the batch ID from the previous apply (it appears in the success-prose from step 7), then call `reverse_batch`. Reversals stay available for 30 days. In user-facing copy, talk about "undoing the batch" — not "calling reverse_batch."
