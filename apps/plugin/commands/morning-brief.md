@@ -90,6 +90,12 @@ Never use "30-minute TTL" in user-facing copy for cron-staged briefs — that's 
 
 Use ONLY the `pending` partition from step 3. Skip applied/reversed records here — they get summary lines below the table.
 
+**Worked example — match this output exactly.** Given a `pending` proposal with `contactEmail: "pat@acme.com"`, `before: { LASTCONT: null, JOBTITLE: "Engineer" }`, `after: { LASTCONT: "2026-05-12", JOBTITLE: "Senior Engineer" }`, and a `tagToName` map of `{ LASTCONT: "Last contacted", JOBTITLE: "Job title" }`, the row's **What's changing** cell renders as:
+
+> Last contacted: — → 2026-05-12; Job title: "Engineer" → "Senior Engineer"
+
+**Not** as `LASTCONT: null → "2026-05-12"`, **not** as `LASTCONT → 2026-05-12`, **not** as `LASTCONT: blank → 1`. The merge-field tag is plumbing; only the human name (from `tagToName`) appears in the output. Use em-dash `—` for `null`/`""` before-values, quote string values, leave numbers/dates unquoted.
+
 Open with a one-sentence framing the user can read at a glance. Use the audience name from step 3's schema lookup (never the raw audience ID, never the literal phrase "proposals generated"):
 
 > Last night's scan of your inbox found **{pending.length} suggested update{s}** for {audienceName}.
@@ -105,11 +111,11 @@ Then print a markdown table:
 
 Rows: one per pending record, newest-first.
 
-After the table, render concise summary lines (each only if its count > 0):
+After the table, render concise summary lines. **Only print a line when its count is strictly > 0.** Suppress the line entirely when the count is zero — don't render `_0 others expired_` or `_no missing records_` (clutter that signals nothing).
 
 - `applied.length > 0` → `_{N} more update{s} already applied (this chat or the dashboard) — not re-listed above._`
 - `reversed.length > 0` → `_{N} update{s} from this brief were undone earlier — not re-listed above._`
-- "missing" gap from step 3 → use the prose from step 3's diagnosis table (superseded / aged-out / TTL-expired wording, chosen by the elapsed-time + run_brief_now check).
+- Missing-record gap (i.e. `pending.length + applied.length + reversed.length < brief.proposalIds.length` AND the difference is > 0) → use the prose from Step 3's diagnosis table. **If the gap is 0, do NOT print any expiry/supersession line at all.** Specifically: never print "0 others expired", never default to "the rest expired" when you don't have evidence — only mention a count if you've actually computed it from the partition above.
 
 **All-applied short-circuit.** If `pending.length === 0 && applied.length > 0`, the brief is fully resolved. Render explicit success copy and stop — no apply CTA, no follow-up question, the work is done:
 
@@ -194,6 +200,8 @@ If the user wants selective apply:
 - Render the result in the same English-first style.
 
 **Lexicon discipline through this whole flow:** in user-facing output, talk about **suggested updates** or **updates**, not "proposals." Talk about **applying** an update, not "staging" it. Talk about **scanning your inbox**, not "re-running the cron pipeline." Talk about **audience name** (from step 3's schema), not raw audience IDs. Never expose MCP tool names (`apply_proposals`, `list_proposals`, `run_brief_now`) in prose to the user — when prompting for an action, use English ("ask me to scan again", "regenerate this brief"). Tool names are fine inside fenced code blocks if the user explicitly asks how to do something themselves.
+
+**Never the 30-min TTL story for cron-staged briefs.** A brief is always cron-staged — its proposals live 6 hours in KV, not 30 minutes. If you find yourself about to write "30-min TTL", "30-minute staging window", "aged out of the 30-min", or any close paraphrase, stop. Use the Step 3 diagnosis table instead. The 30-minute number is only correct for chat-side `propose_update` calls the user makes mid-conversation — never for the overnight brief flow. Surface the wrong number once and the user loses trust in the rest of the brief.
 
 ## Failure modes to handle gracefully
 
